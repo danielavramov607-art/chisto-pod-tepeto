@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Phone, Menu, X } from "lucide-react";
 
 const navLinks = [
@@ -22,11 +23,15 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link
-            href="/"
-            className="text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors"
-          >
-            Чисто под тепето
+          <Link href="/" className="shrink-0 flex items-center">
+            <Image
+              src="/logo.svg"
+              alt="Чисто под Тепето - Професионално почистване Пловдив"
+              width={224}
+              height={56}
+              className="h-33 w-auto mt-5"
+              priority
+            />
           </Link>
 
           {/* Desktop Navigation */}

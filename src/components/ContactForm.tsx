@@ -19,6 +19,7 @@ export default function ContactForm() {
     name: "",
     phone: "",
     serviceType: "",
+    preferredDateTime: "",
     message: "",
   });
 
@@ -38,7 +39,7 @@ export default function ContactForm() {
 
       if (result.success) {
         toast.success(result.message);
-        setFormData({ name: "", phone: "", serviceType: "", message: "" });
+        setFormData({ name: "", phone: "", serviceType: "", preferredDateTime: "", message: "" });
       } else {
         toast.error(result.message);
       }
@@ -102,7 +103,7 @@ export default function ContactForm() {
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 text-black placeholder:text-gray-400"
                   placeholder="Иван Иванов"
                 />
               </div>
@@ -119,7 +120,7 @@ export default function ContactForm() {
                   value={formData.phone}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 text-black placeholder:text-gray-400"
                   placeholder="0888 123 456"
                 />
               </div>
@@ -135,7 +136,7 @@ export default function ContactForm() {
                   value={formData.serviceType}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 bg-white"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 bg-white text-black"
                 >
                   {serviceOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -143,6 +144,21 @@ export default function ContactForm() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Preferred Date and Time */}
+              <div>
+                <label htmlFor="preferredDateTime" className="block text-sm font-medium text-gray-700 mb-1">
+                  Предпочитана дата и час
+                </label>
+                <input
+                  type="datetime-local"
+                  id="preferredDateTime"
+                  name="preferredDateTime"
+                  value={formData.preferredDateTime}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 text-black"
+                />
               </div>
 
               {/* Message */}
@@ -156,7 +172,7 @@ export default function ContactForm() {
                   value={formData.message}
                   onChange={handleChange}
                   rows={4}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 resize-none"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none transition-all duration-200 resize-none text-black placeholder:text-gray-400"
                   placeholder="Опишете какво имате нужда..."
                 />
               </div>

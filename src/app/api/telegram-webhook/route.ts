@@ -123,10 +123,12 @@ export async function POST(request: NextRequest) {
       // Answer the callback query immediately
       await answerCallbackQuery(callbackQuery.id);
 
-      // Check if this is a calendar approval
-      if (callbackData.startsWith("approve_cal_")) {
-        // Lead ID is a UUID string, not a number
-        const leadId = callbackData.replace("approve_cal_", "").trim();
+      // Check if this is a calendar approval (supports both old "approve_cal_" and new "cal:" prefix)
+      if (callbackData.startsWith("cal:") || callbackData.startsWith("approve_cal_")) {
+        // Lead ID is a UUID string, extract it from either prefix format
+        const leadId = callbackData.startsWith("cal:")
+          ? callbackData.slice(4).trim()  // Remove "cal:" prefix (4 chars)
+          : callbackData.replace("approve_cal_", "").trim();  // Legacy format
 
         console.log("[Telegram Webhook] ========== DEBUG START ==========");
         console.log("[Telegram Webhook] Raw callback_data:", JSON.stringify(callbackData));

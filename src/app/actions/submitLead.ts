@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { getSupabaseServiceClient } from "@/lib/supabase";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -126,30 +126,59 @@ function getEmailTemplate(data: LeadFormData): string {
 
 async function sendEmailNotification(data: LeadFormData): Promise<void> {
   const contactEmail = process.env.CONTACT_EMAIL;
+  const resendApiKey = process.env.RESEND_API_KEY;
+
+  console.log("[Email] Starting email notification...");
+  console.log("[Email] RESEND_API_KEY exists:", !!resendApiKey);
+  console.log("[Email] CONTACT_EMAIL exists:", !!contactEmail);
+
+  if (!resendApiKey) {
+    console.error("[Email] ERROR: RESEND_API_KEY environment variable is not set");
+    return;
+  }
 
   if (!contactEmail) {
-    console.error("CONTACT_EMAIL environment variable is not set");
+    console.error("[Email] ERROR: CONTACT_EMAIL environment variable is not set");
     return;
   }
 
   try {
-    await resend.emails.send({
+    console.log("[Email] Sending email to:", contactEmail);
+    const response = await resend.emails.send({
       from: "Чисто под Тепето <onboarding@resend.dev>",
       to: contactEmail,
       subject: `Ново запитване от ${data.name.trim()}`,
       html: getEmailTemplate(data),
     });
+    console.log("[Email] SUCCESS - Email sent. Response:", JSON.stringify(response));
   } catch (error) {
-    console.error("Failed to send email notification:", error);
+    console.error("[Email] ERROR - Failed to send email notification:");
+    if (error instanceof Error) {
+      console.error("[Email] Error name:", error.name);
+      console.error("[Email] Error message:", error.message);
+      console.error("[Email] Error stack:", error.stack);
+    } else {
+      console.error("[Email] Error details:", JSON.stringify(error));
+    }
   }
 }
 
-async function sendTelegramNotification(data: LeadFormData, leadId: number): Promise<void> {
+async function sendTelegramNotification(data: LeadFormData, leadId: string): Promise<void> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  if (!botToken || !chatId) {
-    console.error("Telegram environment variables are not set (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)");
+  console.log("[Telegram] Starting Telegram notification...");
+  console.log("[Telegram] TELEGRAM_BOT_TOKEN exists:", !!botToken);
+  console.log("[Telegram] TELEGRAM_CHAT_ID exists:", !!chatId);
+  console.log("[Telegram] Lead ID:", leadId);
+
+  if (!botToken) {
+    console.error("[Telegram] ERROR: TELEGRAM_BOT_TOKEN environment variable is not set");
+    return;
+  }
+
+  if (!chatId) {
+    console.error("[Telegram] ERROR: TELEGRAM_CHAT_ID environment variable is not set");
     return;
   }
 
@@ -166,18 +195,23 @@ async function sendTelegramNotification(data: LeadFormData, leadId: number): Pro
 📅 <b>Предпочитана дата и час:</b> ${preferredDateTimeFormatted}` : ''}
 💬 <b>Съобщение:</b> ${messageContent}`;
 
+  // Telegram callback_data has a 64-byte limit. UUID is 36 chars, so use short prefix "cal:"
+  const callbackData = `cal:${leadId}`;
+  console.log("[Telegram] Callback data:", callbackData, "Length:", callbackData.length, "bytes");
+
   const inlineKeyboard = {
     inline_keyboard: [
       [
         {
           text: "📅 Добави в Google Календар",
-          callback_data: `approve_cal_${leadId}`,
+          callback_data: callbackData,
         },
       ],
     ],
   };
 
   try {
+    console.log("[Telegram] Sending message to chat ID:", chatId);
     const response = await fetch(
       `https://api.telegram.org/bot${botToken}/sendMessage`,
       {
@@ -194,12 +228,24 @@ async function sendTelegramNotification(data: LeadFormData, leadId: number): Pro
       }
     );
 
+    const responseData = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Telegram API error:", errorData);
+      console.error("[Telegram] ERROR - API returned non-OK status:");
+      console.error("[Telegram] HTTP Status:", response.status, response.statusText);
+      console.error("[Telegram] Error response:", JSON.stringify(responseData));
+    } else {
+      console.log("[Telegram] SUCCESS - Message sent. Response:", JSON.stringify(responseData));
     }
   } catch (error) {
-    console.error("Failed to send Telegram notification:", error);
+    console.error("[Telegram] ERROR - Failed to send notification:");
+    if (error instanceof Error) {
+      console.error("[Telegram] Error name:", error.name);
+      console.error("[Telegram] Error message:", error.message);
+      console.error("[Telegram] Error stack:", error.stack);
+    } else {
+      console.error("[Telegram] Error details:", JSON.stringify(error));
+    }
   }
 }
 
@@ -218,6 +264,7 @@ export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> 
   }
 
   try {
+    const supabase = getSupabaseServiceClient();
     const { data: insertedLead, error } = await supabase
       .from("leads")
       .insert([
@@ -238,12 +285,34 @@ export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> 
     }
 
     const leadId = insertedLead?.id;
+    console.log("[submitLead] Lead inserted successfully. ID:", leadId);
 
-    // Send notifications (don't block on failure)
-    sendEmailNotification(data);
+    // Send notifications in parallel, each wrapped in try-catch to ensure independence
+    // Using Promise.allSettled ensures one failure doesn't affect the other
+    const notificationPromises: Promise<void>[] = [];
+
+    // Always send email notification
+    notificationPromises.push(
+      sendEmailNotification(data).catch((err) => {
+        console.error("[submitLead] Email notification promise rejected:", err);
+      })
+    );
+
+    // Send Telegram notification if we have the leadId
     if (leadId) {
-      sendTelegramNotification(data, leadId);
+      notificationPromises.push(
+        sendTelegramNotification(data, leadId).catch((err) => {
+          console.error("[submitLead] Telegram notification promise rejected:", err);
+        })
+      );
+    } else {
+      console.warn("[submitLead] No leadId available, skipping Telegram notification");
     }
+
+    // Wait for all notifications to complete (or fail gracefully)
+    // This ensures we see all logs before the function returns
+    await Promise.allSettled(notificationPromises);
+    console.log("[submitLead] All notifications processed");
 
     return { success: true, message: "Благодарим ви! Ще се свържем с вас скоро." };
   } catch (error) {

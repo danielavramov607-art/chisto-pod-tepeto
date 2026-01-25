@@ -59,7 +59,7 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
 }
 
 async function createCalendarEvent(lead: {
-  id: number;
+  id: string;
   name: string;
   phone: string;
   service_type: string;
@@ -125,23 +125,20 @@ export async function POST(request: NextRequest) {
 
       // Check if this is a calendar approval
       if (callbackData.startsWith("approve_cal_")) {
-        const leadIdString = callbackData.replace("approve_cal_", "").trim();
-        const leadId = Number(leadIdString);
+        // Lead ID is a UUID string, not a number
+        const leadId = callbackData.replace("approve_cal_", "").trim();
 
         console.log("[Telegram Webhook] ========== DEBUG START ==========");
         console.log("[Telegram Webhook] Raw callback_data:", JSON.stringify(callbackData));
-        console.log("[Telegram Webhook] Extracted leadIdString:", JSON.stringify(leadIdString));
-        console.log("[Telegram Webhook] leadIdString length:", leadIdString.length);
-        console.log("[Telegram Webhook] leadIdString charCodes:", [...leadIdString].map(c => c.charCodeAt(0)));
-        console.log("[Telegram Webhook] Parsed leadId (using Number()):", leadId);
-        console.log("[Telegram Webhook] typeof leadId:", typeof leadId);
-        console.log("[Telegram Webhook] isNaN(leadId):", isNaN(leadId));
-        console.log("[Telegram Webhook] leadId > 0:", leadId > 0);
+        console.log("[Telegram Webhook] Extracted leadId (UUID):", JSON.stringify(leadId));
+        console.log("[Telegram Webhook] leadId length:", leadId.length);
 
-        if (isNaN(leadId) || leadId <= 0) {
-          console.error("[Telegram Webhook] Invalid leadId - not a valid positive number");
+        // Validate UUID format (basic check)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!leadId || !uuidRegex.test(leadId)) {
+          console.error("[Telegram Webhook] Invalid leadId - not a valid UUID format");
           if (chatId) {
-            await sendTelegramMessage(chatId, `❌ Невалиден ID на запитване: "${leadIdString}"`);
+            await sendTelegramMessage(chatId, `❌ Невалиден ID на запитване: "${leadId}"`);
           }
           return NextResponse.json({ ok: true });
         }
@@ -159,18 +156,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ ok: true });
         }
 
-        // First, let's check what's in the leads table
-        console.log("[Telegram Webhook] Checking all leads in table...");
-        const { data: allLeads, error: allLeadsError } = await supabaseService
-          .from("leads")
-          .select("id")
-          .order("id", { ascending: false })
-          .limit(5);
-
-        console.log("[Telegram Webhook] Recent lead IDs:", JSON.stringify(allLeads));
-        console.log("[Telegram Webhook] All leads error:", JSON.stringify(allLeadsError));
-
-        console.log("[Telegram Webhook] Querying leads table for id:", leadId, "type:", typeof leadId);
+        console.log("[Telegram Webhook] Querying leads table for UUID:", leadId);
 
         const { data: lead, error } = await supabaseService
           .from("leads")
@@ -191,7 +177,7 @@ export async function POST(request: NextRequest) {
             errorHint: error?.hint,
           });
           if (chatId) {
-            await sendTelegramMessage(chatId, `❌ Запитването с ID ${leadId} не беше намерено.`);
+            await sendTelegramMessage(chatId, `❌ Запитването не беше намерено.`);
           }
           return NextResponse.json({ ok: true });
         }

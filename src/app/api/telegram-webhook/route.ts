@@ -10,12 +10,42 @@ const serviceLabels: Record<string, string> = {
 };
 
 function getGoogleAuth() {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
 
-  if (!privateKey || !clientEmail) {
-    throw new Error("Google credentials are not configured");
+  console.log("[Google Auth] Checking credentials...");
+
+  if (!clientEmail) {
+    console.error("[Google Auth] ERROR: GOOGLE_CLIENT_EMAIL is not set");
+    throw new Error("GOOGLE_CLIENT_EMAIL is not configured");
   }
+
+  if (!rawPrivateKey) {
+    console.error("[Google Auth] ERROR: GOOGLE_PRIVATE_KEY is not set");
+    throw new Error("GOOGLE_PRIVATE_KEY is not configured");
+  }
+
+  // Handle private key format - Vercel may store it with literal \n or actual newlines
+  // Try multiple replacement strategies
+  let privateKey = rawPrivateKey;
+
+  // Replace literal \n with actual newlines
+  if (privateKey.includes("\\n")) {
+    privateKey = privateKey.replace(/\\n/g, "\n");
+    console.log("[Google Auth] Replaced literal \\n with newlines");
+  }
+
+  // Check if the key looks valid (starts with BEGIN and ends with END)
+  const hasBegin = privateKey.includes("-----BEGIN");
+  const hasEnd = privateKey.includes("-----END");
+  console.log("[Google Auth] Private key has BEGIN marker:", hasBegin);
+  console.log("[Google Auth] Private key has END marker:", hasEnd);
+
+  if (!hasBegin || !hasEnd) {
+    console.error("[Google Auth] WARNING: Private key may be malformed");
+  }
+
+  console.log("[Google Auth] Creating JWT auth with email:", clientEmail);
 
   return new google.auth.JWT({
     email: clientEmail,
@@ -65,23 +95,43 @@ async function createCalendarEvent(lead: {
   service_type: string;
   preferred_date_time: string | null;
 }) {
+  console.log("[Google Calendar] ========== CALENDAR DEBUG START ==========");
+
   const calendarId = process.env.GOOGLE_CALENDAR_ID;
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  console.log("[Google Calendar] GOOGLE_CALENDAR_ID exists:", !!calendarId);
+  console.log("[Google Calendar] GOOGLE_CLIENT_EMAIL exists:", !!clientEmail);
+  console.log("[Google Calendar] GOOGLE_PRIVATE_KEY exists:", !!privateKey);
+  console.log("[Google Calendar] GOOGLE_PRIVATE_KEY length:", privateKey?.length || 0);
+
+  if (clientEmail) {
+    console.log("[Google Calendar] Client email:", clientEmail);
+  }
 
   if (!calendarId) {
+    console.error("[Google Calendar] ERROR: GOOGLE_CALENDAR_ID is not configured");
     throw new Error("GOOGLE_CALENDAR_ID is not configured");
   }
 
+  console.log("[Google Calendar] Getting Google Auth...");
   const auth = getGoogleAuth();
+  console.log("[Google Calendar] Auth object created successfully");
+
   const calendar = google.calendar({ version: "v3", auth });
+  console.log("[Google Calendar] Calendar client created");
 
   // Use preferred date/time or default to tomorrow
   let startTime: Date;
   if (lead.preferred_date_time) {
     startTime = new Date(lead.preferred_date_time);
+    console.log("[Google Calendar] Using preferred date/time:", lead.preferred_date_time);
   } else {
     startTime = new Date();
     startTime.setDate(startTime.getDate() + 1);
     startTime.setHours(10, 0, 0, 0); // Default to 10:00 AM
+    console.log("[Google Calendar] No preferred date, defaulting to tomorrow 10:00 AM");
   }
 
   const endTime = new Date(startTime);
@@ -102,10 +152,18 @@ async function createCalendarEvent(lead: {
     },
   };
 
+  console.log("[Google Calendar] Event to create:", JSON.stringify(event));
+  console.log("[Google Calendar] Inserting event into calendar:", calendarId);
+
   const response = await calendar.events.insert({
     calendarId,
     requestBody: event,
   });
+
+  console.log("[Google Calendar] SUCCESS - Event created!");
+  console.log("[Google Calendar] Event ID:", response.data.id);
+  console.log("[Google Calendar] Event link:", response.data.htmlLink);
+  console.log("[Google Calendar] ========== CALENDAR DEBUG END ==========");
 
   return response.data;
 }
@@ -185,8 +243,13 @@ export async function POST(request: NextRequest) {
         }
 
         // Create Google Calendar event
+        console.log("[Telegram Webhook] Starting Google Calendar event creation...");
+        console.log("[Telegram Webhook] Lead for calendar:", JSON.stringify(lead));
+
         try {
-          await createCalendarEvent(lead);
+          const calendarEvent = await createCalendarEvent(lead);
+
+          console.log("[Telegram Webhook] Calendar event created successfully:", calendarEvent?.id);
 
           if (chatId) {
             await sendTelegramMessage(
@@ -195,7 +258,15 @@ export async function POST(request: NextRequest) {
             );
           }
         } catch (calendarError) {
-          console.error("Failed to create calendar event:", calendarError);
+          console.error("[Telegram Webhook] ERROR - Failed to create calendar event:");
+          if (calendarError instanceof Error) {
+            console.error("[Telegram Webhook] Error name:", calendarError.name);
+            console.error("[Telegram Webhook] Error message:", calendarError.message);
+            console.error("[Telegram Webhook] Error stack:", calendarError.stack);
+          } else {
+            console.error("[Telegram Webhook] Error details:", JSON.stringify(calendarError));
+          }
+
           if (chatId) {
             await sendTelegramMessage(
               chatId,

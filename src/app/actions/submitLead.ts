@@ -163,7 +163,7 @@ async function sendEmailNotification(data: LeadFormData): Promise<void> {
   }
 }
 
-async function sendTelegramNotification(data: LeadFormData, leadId: string): Promise<void> {
+async function sendTelegramNotification(data: LeadFormData, leadId: string, isPromo: boolean): Promise<void> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -171,6 +171,7 @@ async function sendTelegramNotification(data: LeadFormData, leadId: string): Pro
   console.log("[Telegram] TELEGRAM_BOT_TOKEN exists:", !!botToken);
   console.log("[Telegram] TELEGRAM_CHAT_ID exists:", !!chatId);
   console.log("[Telegram] Lead ID:", leadId);
+  console.log("[Telegram] Is Promo:", isPromo);
 
   if (!botToken) {
     console.error("[Telegram] ERROR: TELEGRAM_BOT_TOKEN environment variable is not set");
@@ -187,13 +188,18 @@ async function sendTelegramNotification(data: LeadFormData, leadId: string): Pro
   const phone = data.phone.trim();
   const preferredDateTimeFormatted = formatPreferredDateTime(data.preferredDateTime);
 
-  const telegramMessage = `🆕 <b>Ново запитване от сайта!</b>
+  // Build the message with promo header if applicable
+  const promoHeader = isPromo
+    ? `🎁 <b>НОВО ЗАПИТВАНЕ ПО КАМПАНИЯТА "ПЪРВИТЕ 10" (-20%)</b>\n\n`
+    : '';
+
+  const telegramMessage = `${promoHeader}🆕 <b>Ново запитване от сайта!</b>
 
 👤 <b>Име:</b> ${data.name.trim()}
 📞 <b>Телефон:</b> <a href="tel:${phone}">${phone}</a>
 🧹 <b>Услуга:</b> ${serviceLabel}${preferredDateTimeFormatted ? `
 📅 <b>Предпочитана дата и час:</b> ${preferredDateTimeFormatted}` : ''}
-💬 <b>Съобщение:</b> ${messageContent}`;
+💬 <b>Съобщение:</b> ${messageContent}${isPromo ? '\n\n✨ <i>VIP клиент с 20% отстъпка!</i>' : ''}`;
 
   // Telegram callback_data has a 64-byte limit. UUID is 36 chars, so use short prefix "cal:"
   const callbackData = `cal:${leadId}`;
@@ -249,7 +255,29 @@ async function sendTelegramNotification(data: LeadFormData, leadId: string): Pro
   }
 }
 
-export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> {
+const MAX_PROMO_SLOTS = 10;
+
+async function getPromoLeadsCount(): Promise<number> {
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { count, error } = await supabase
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .eq("is_promo", true);
+
+    if (error) {
+      console.error("[submitLead] Error fetching promo leads count:", error);
+      return 0;
+    }
+
+    return count ?? 0;
+  } catch (error) {
+    console.error("[submitLead] Failed to get promo leads count:", error);
+    return 0;
+  }
+}
+
+export async function submitLead(data: LeadFormData, isPromoRequest: boolean = false): Promise<SubmitLeadResult> {
   // Validation
   if (!data.name || data.name.trim().length < 2) {
     return { success: false, message: "Моля, въведете валидно име" };
@@ -265,6 +293,21 @@ export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> 
 
   try {
     const supabase = getSupabaseServiceClient();
+
+    // Check if promo slots are still available
+    let isPromo = false;
+    if (isPromoRequest) {
+      const currentPromoCount = await getPromoLeadsCount();
+      console.log("[submitLead] Current promo leads count:", currentPromoCount);
+
+      if (currentPromoCount < MAX_PROMO_SLOTS) {
+        isPromo = true;
+        console.log("[submitLead] Promo slot available, marking lead as promo");
+      } else {
+        console.log("[submitLead] All promo slots taken, lead will not be marked as promo");
+      }
+    }
+
     const { data: insertedLead, error } = await supabase
       .from("leads")
       .insert([
@@ -274,6 +317,7 @@ export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> 
           service_type: data.serviceType,
           preferred_date_time: data.preferredDateTime || null,
           message: data.message.trim(),
+          is_promo: isPromo,
         },
       ])
       .select("id")
@@ -301,7 +345,7 @@ export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> 
     // Send Telegram notification if we have the leadId
     if (leadId) {
       notificationPromises.push(
-        sendTelegramNotification(data, leadId).catch((err) => {
+        sendTelegramNotification(data, leadId, isPromo).catch((err) => {
           console.error("[submitLead] Telegram notification promise rejected:", err);
         })
       );
@@ -313,6 +357,14 @@ export async function submitLead(data: LeadFormData): Promise<SubmitLeadResult> 
     // This ensures we see all logs before the function returns
     await Promise.allSettled(notificationPromises);
     console.log("[submitLead] All notifications processed");
+
+    // Return appropriate success message
+    if (isPromo) {
+      return {
+        success: true,
+        message: "Поздравления! Вие сте сред първите 10 клиенти с 20% отстъпка! Ще се свържем с вас скоро."
+      };
+    }
 
     return { success: true, message: "Благодарим ви! Ще се свържем с вас скоро." };
   } catch (error) {

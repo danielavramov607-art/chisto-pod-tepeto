@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { Send, Loader2, Gift } from "lucide-react";
 import toast from "react-hot-toast";
 import { submitLead } from "@/app/actions/submitLead";
 
@@ -14,6 +15,8 @@ const serviceOptions = [
 ];
 
 export default function ContactForm() {
+  const searchParams = useSearchParams();
+  const [isPromo, setIsPromo] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -22,6 +25,11 @@ export default function ContactForm() {
     preferredDateTime: "",
     message: "",
   });
+
+  useEffect(() => {
+    const promoParam = searchParams.get("promo");
+    setIsPromo(promoParam === "true");
+  }, [searchParams]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -35,7 +43,7 @@ export default function ContactForm() {
     setIsSubmitting(true);
 
     try {
-      const result = await submitLead(formData);
+      const result = await submitLead(formData, isPromo);
 
       if (result.success) {
         toast.success(result.message);
@@ -51,14 +59,14 @@ export default function ContactForm() {
   };
 
   return (
-    <section id="contact" className="py-16 lg:py-24 bg-gradient-to-b from-white to-teal-50/30">
+    <section id="contact" className="py-16 lg:py-24 bg-linear-to-b from-white to-teal-50/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left side - Text content */}
           <div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900">
               Свържете се{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-teal-600 to-blue-600">
                 с нас
               </span>
             </h2>
@@ -90,6 +98,16 @@ export default function ContactForm() {
 
           {/* Right side - Form */}
           <div className="bg-white rounded-2xl p-6 lg:p-8 shadow-xl border border-gray-100">
+            {/* Promo Badge */}
+            {isPromo && (
+              <div className="mb-6 flex items-center gap-2 bg-linear-to-r from-amber-50 to-yellow-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl">
+                <Gift className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="text-sm font-medium">
+                  Вие кандидатствате за <strong>-20% отстъпка</strong> от кампанията &quot;Първите 10&quot;!
+                </span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Name */}
               <div>
@@ -181,7 +199,7 @@ export default function ContactForm() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 text-lg font-semibold text-white bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 text-lg font-semibold text-white bg-linear-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
                   <>

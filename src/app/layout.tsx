@@ -12,6 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://chistopodtepeto.com"),
   title: "Чисто под Тепето | Професионално почистване Пловдив",
   description:
     "Професионално почистване на домове, офиси и обекти след ремонт в Пловдив. Доверете се на качеството!",
@@ -22,13 +23,13 @@ export const metadata: Metadata = {
     siteName: "Чисто под Тепето",
     locale: "bg_BG",
     type: "website",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-      },
-    ],
+    images: "/og-image.png",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Чисто под Тепето",
+    description: "Най-доброто професионално почистване в Пловдив.",
+    images: "/og-image.png",
   },
 };
 

@@ -30,7 +30,7 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="shrink-0 flex items-center">
             <Image
-              src="/logo.svg"
+              src="/logo_navbar.png"
               alt="Чисто под Тепето - Професионално почистване Пловдив"
               width={224}
               height={56}

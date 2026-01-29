@@ -54,11 +54,11 @@ export default function Footer() {
           <div className="sm:col-span-2 lg:col-span-1 flex flex-col items-center justify-between">
             <Link href="/" className="inline-block">
               <Image
-                src="/logo.svg"
+                src="/logo_navbar.png"
                 alt="Чисто под Тепето"
                 width={180}
                 height={48}
-                className="w-35 h-auto brightness-0 invert"
+                className="w-40 h-auto brightness-0 invert"
               />
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed text-center max-w-50">
